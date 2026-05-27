@@ -104,8 +104,12 @@ def extract_salary(vacancy: dict[str, Any]) -> int | None:
         return None
 
     currency = salary.get("currency", "RUR")
-    if currency != "RUR":
-        return None
+    # Конвертируем в рубли по приблизительному курсу
+    RATES = {"RUR": 1, "RUB": 1, "USD": 90, "EUR": 100, "KZT": 0.2}
+    rate = RATES.get(currency)
+    if rate is None:
+        return None  # неизвестная валюта — пропускаем
+    salary_from = int(salary_from * rate)
 
     if salary.get("gross"):
         salary_from = int(salary_from * 0.87)

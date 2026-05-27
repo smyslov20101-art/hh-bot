@@ -25,7 +25,22 @@ def generate_letter(vacancy: dict) -> str:
     wants_vibe      = any(k in text for k in ["вайб", "vibe", "вайбкод"])
 
     # ── Вступление ───────────────────────────────────────────
-    if wants_claude or wants_vibe:
+    if wants_vibe and wants_telegram:
+        intro = (
+            "Вайб-кодер, специализируюсь на Telegram-ботах и автоматизации. "
+            "Строю рабочие решения быстро — от идеи до деплоя на VPS."
+        )
+    elif wants_vibe:
+        intro = (
+            "Вайб-кодинг — мой основной подход к разработке. "
+            "Быстро собираю рабочие решения на Python + Claude Code."
+        )
+    elif wants_telegram and wants_automation:
+        intro = (
+            "Разрабатываю Telegram-ботов и автоматизации на Python + aiogram — "
+            "есть несколько запущенных проектов в продакшне."
+        )
+    elif wants_claude:
         intro = (
             "Работаю с Claude Code как основным инструментом ежедневно — "
             "именно это ключевое требование в вашей вакансии."
@@ -70,11 +85,16 @@ def generate_letter(vacancy: dict) -> str:
         "github.com/smyslov20101-art/hh-bot"
     )
 
-    # Выбираем какой проект ставить первым
-    if wants_agents or wants_automation or wants_prompt:
-        projects = [project_idea, project_wife]
+    # Выбираем проекты под вакансию
+    if wants_telegram and (wants_automation or wants_n8n):
+        # Telegram боты + автоматизация → все три проекта релевантны
+        projects = [project_wife, project_hh, project_idea]
     elif wants_telegram:
-        projects = [project_wife, project_idea]
+        projects = [project_wife, project_hh]
+    elif wants_agents or wants_prompt:
+        projects = [project_idea, project_wife]
+    elif wants_automation:
+        projects = [project_hh, project_idea]
     elif wants_sheets or wants_integration:
         projects = [project_hh, project_idea]
     else:
