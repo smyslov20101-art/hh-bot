@@ -1,0 +1,28 @@
+# Секреты — никогда не публиковать
+.env
+credentials.json
+
+# Личные данные
+seen.db
+analyzed_vacancies.json
+queue_state.json
+pending_vacancies.json
+results.csv
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
