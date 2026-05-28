@@ -118,7 +118,7 @@ def extract_salary(vacancy: dict[str, Any]) -> int | None:
 
 
 def is_remote_or_moscow(vacancy: dict[str, Any]) -> bool:
-    """Удалёнка или Москва."""
+    """Удалёнка или Москва (включая Московскую область и упоминание удалёнки в описании)."""
     schedule = vacancy.get("schedule") or {}
     schedule_id = schedule.get("id", "")
     if schedule_id in ("remote", "flexible"):
@@ -129,7 +129,19 @@ def is_remote_or_moscow(vacancy: dict[str, Any]) -> bool:
         return True
 
     area = vacancy.get("area") or {}
-    if area.get("id") == "1" or "москва" in (area.get("name") or "").lower():
+    area_name = (area.get("name") or "").lower()
+    if area.get("id") == "1" or "москва" in area_name:
+        return True
+
+    # Московская область (id=2) — рядом с Москвой
+    if area.get("id") == "2":
+        return True
+
+    # Проверяем описание на упоминание удалёнки / ГПХ
+    description = (vacancy.get("_raw_description") or "").lower()
+    remote_hints = ["удалённо", "удаленно", "удалённая", "дистанционно",
+                    "из любой точки", "remote", "гпх", "самозанят"]
+    if any(hint in description for hint in remote_hints):
         return True
 
     return False
