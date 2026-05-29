@@ -25,6 +25,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from hh_client import HHClient
+from raberu import fetch_raberu_vacancies
 from filters import hard_filter, extract_salary, has_ai_dev_keywords
 from db import SeenDB
 from letter_gen import generate_letter
@@ -79,6 +80,7 @@ def vacancy_to_card(vacancy: dict) -> dict:
         "schedule": (vacancy.get("schedule") or {}).get("name", ""),
         "area": (vacancy.get("area") or {}).get("name", ""),
         "url": vacancy.get("alternate_url", ""),
+        "source": vacancy.get("_source", "hh"),
         "tier": tier,
         "reason": f"Автоматическая оценка: Tier {tier}. Проверь требования глазами перед откликом.",
         "letter": generate_letter(vacancy),
@@ -113,11 +115,24 @@ def main():
     min_salary = int(os.getenv("MIN_SALARY", "60000"))
     max_total = int(os.getenv("MAX_VACANCIES", "40"))
 
-    # ─── 1. Поиск ────────────────────────────────────────────
-    print(f"\n🔍 Поиск по {len(queries)} запросам...")
+    # ─── 1. Поиск hh.ru ──────────────────────────────────────
+    print(f"\n🔍 [hh.ru] Поиск по {len(queries)} запросам...")
     hh = HHClient(delay_sec=0.7)
-    raw = hh.search_and_fetch(queries, per_page=50, max_total=max_total)
-    print(f"\n  Загружено: {len(raw)}")
+    raw_hh = hh.search_and_fetch(queries, per_page=50, max_total=max_total)
+    print(f"  hh.ru загружено: {len(raw_hh)}")
+
+    # ─── 1b. Поиск raberu.ru ──────────────────────────────────
+    print(f"\n🔍 [raberu.ru] Парсим вакансии...")
+    try:
+        raw_raberu = fetch_raberu_vacancies()
+        print(f"  raberu.ru загружено: {len(raw_raberu)}")
+    except Exception as e:
+        print(f"  raberu.ru ошибка: {e} — пропускаем")
+        raw_raberu = {}
+
+    # Объединяем оба источника
+    raw = {**raw_hh, **raw_raberu}
+    print(f"\n  Загружено всего: {len(raw)} ({len(raw_hh)} hh + {len(raw_raberu)} raberu)")
 
     # ─── 2. Строгий фильтр ───────────────────────────────────
     filtered = hard_filter(raw, min_salary=min_salary)
