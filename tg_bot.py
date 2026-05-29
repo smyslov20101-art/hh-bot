@@ -32,6 +32,7 @@ from tg_queue import VacancyQueue
 from tg_presenter import format_card, format_letter, format_stats
 from hh_apply import HHApplier
 from db import SeenDB
+from email_sender import load_outreach_queue, save_outreach_queue, send_email
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -81,6 +82,15 @@ def card_keyboard(vacancy_id: str) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(text="✉️ Письмо", callback_data=f"letter:{vacancy_id}"),
+        ],
+    ])
+
+
+def outreach_keyboard(outreach_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📧 Отправить письмо", callback_data=f"send_email:{outreach_id}"),
+            InlineKeyboardButton(text="❌ Пропустить", callback_data=f"skip_email:{outreach_id}"),
         ],
     ])
 
@@ -161,6 +171,80 @@ async def handle_reload(message: Message) -> None:
         return
     queue.reload()
     await message.answer("🔄 Перечитал. " + format_stats(queue.stats()).split("\n", 1)[1])
+
+
+async def handle_outreach(message: Message, bot: Bot) -> None:
+    """Показывает следующую компанию из очереди аутрича."""
+    if not is_allowed(message.from_user.id):
+        return
+
+    outreach_queue = load_outreach_queue()
+    pending = [o for o in outreach_queue if not o.get("sent")]
+
+    if not pending:
+        await message.answer(
+            "📭 Очередь аутрича пуста.\n\n"
+            "Запусти <code>python daily.py</code> — бот найдёт новые компании."
+        )
+        return
+
+    item = pending[0]
+    text = (
+        f"📬 <b>Аутрич — компания найдена</b>\n\n"
+        f"🏢 <b>{item['company']}</b>\n"
+        f"🔗 {item['url']}\n"
+        f"📧 {item['email']}\n\n"
+        f"<b>Тема:</b> {item['subject']}\n\n"
+        f"<b>Письмо:</b>\n<pre>{item['body'][:800]}</pre>"
+    )
+    await message.answer(
+        text,
+        reply_markup=outreach_keyboard(item["id"]),
+        disable_web_page_preview=True,
+    )
+    await message.answer(f"Ещё в очереди: {len(pending) - 1} компаний")
+
+
+async def handle_email_callback(callback: CallbackQuery, bot: Bot) -> None:
+    """Обрабатывает кнопки аутрича: отправить / пропустить."""
+    if not is_allowed(callback.from_user.id):
+        return
+
+    data = callback.data or ""
+    action, outreach_id = data.split(":", 1)
+
+    outreach_queue = load_outreach_queue()
+    item = next((o for o in outreach_queue if o["id"] == outreach_id), None)
+    if not item:
+        await callback.answer("Не найдено в очереди", show_alert=True)
+        return
+
+    if action == "skip_email":
+        item["sent"] = True
+        item["skipped"] = True
+        save_outreach_queue(outreach_queue)
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer("❌ Пропустил эту компанию.")
+        await callback.answer()
+        return
+
+    if action == "send_email":
+        await callback.answer("Отправляю...")
+        ok = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: send_email(item["email"], item["subject"], item["body"]),
+        )
+        if ok:
+            item["sent"] = True
+            save_outreach_queue(outreach_queue)
+            await callback.message.edit_reply_markup(reply_markup=None)
+            await callback.message.answer(
+                f"✅ Письмо отправлено на {item['email']}!\n"
+                f"Компания: {item['company']}"
+            )
+        else:
+            await callback.message.answer("❌ Не удалось отправить. Проверь SMTP настройки.")
+        return
 
 
 async def handle_callback(callback: CallbackQuery, bot: Bot) -> None:
@@ -311,6 +395,8 @@ async def main() -> None:
     dp.message.register(handle_next, Command("next"))
     dp.message.register(handle_stats, Command("stats"))
     dp.message.register(handle_reload, Command("reload"))
+    dp.message.register(handle_outreach, Command("outreach"))
+    dp.callback_query.register(handle_email_callback, F.data.regexp(r"^(send_email|skip_email):"))
     dp.callback_query.register(handle_callback, F.data.regexp(r"^(apply|skip|letter):"))
 
     me = await bot.get_me()

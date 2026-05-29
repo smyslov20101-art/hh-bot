@@ -27,7 +27,8 @@ from dotenv import load_dotenv
 from hh_client import HHClient
 from raberu import fetch_raberu_vacancies
 from habr_client import fetch_habr_vacancies
-from google_searcher import fetch_google_vacancies
+from google_searcher import fetch_google_vacancies, fetch_google_companies
+from email_sender import add_to_outreach_queue
 from filters import hard_filter, extract_salary, has_ai_dev_keywords
 from db import SeenDB
 from letter_gen import generate_letter
@@ -198,6 +199,25 @@ def main():
     print(f"   Всего в очереди: {len(merged)}")
     print(f"{'='*60}")
     print(f"\n📱 Открой бот → /reload — карточки готовы.")
+
+    # ─── 6. Аутрич — ищем компании через Google ──────────────
+    print(f"\n{'='*60}")
+    print(f"📬 Ищем компании для аутрича через Google...")
+    try:
+        companies = fetch_google_companies()
+        print(f"  Найдено компаний: {len(companies)}")
+        added = 0
+        for company in companies:
+            card = add_to_outreach_queue(company)
+            if card:
+                added += 1
+        if added > 0:
+            print(f"  ✅ Добавлено в аутрич-очередь: {added}")
+            print(f"  📱 В боте → /outreach — смотри письма и жми «Отправить»")
+        else:
+            print(f"  ℹ️  Новых email не найдено")
+    except Exception as e:
+        print(f"  Аутрич ошибка: {e} — пропускаем")
     print(f"\n📊 Распределение:")
     tier_counts: dict = {}
     for c in new_cards:
