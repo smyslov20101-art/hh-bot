@@ -27,6 +27,10 @@ BLACKLIST_KEYWORDS = [
     "тестировщик", "qa-инженер", "qa engineer",
     "технический писатель", "techwriter",
 
+    # финансы / бухгалтерия
+    "accountant", "бухгалтер", "финансист", "финансовый аналитик",
+    "ar specialist", "ar accountant",
+
     # не наш стек
     "wordpress", "битрикс", "bitrix", "1с-битрикс", "1c-bitrix",
     "laravel", "php-разработчик", "php разработчик",
@@ -147,10 +151,28 @@ def is_remote_or_moscow(vacancy: dict[str, Any]) -> bool:
     return False
 
 
+# Стек JS/TS без Python — нам не подходит
+JS_STACK_KEYWORDS = ["react", "angular", "vue", "next.js", "nestjs", "nest.js", "typescript", "javascript"]
+PYTHON_KEYWORDS = ["python", "fastapi", "django", "flask", "aiogram", "питон"]
+
+
 def has_blacklist_words(vacancy: dict[str, Any]) -> bool:
     """Чёрный список в названии."""
     name = (vacancy.get("name") or "").lower()
     return any(word in name for word in BLACKLIST_KEYWORDS)
+
+
+def is_js_only_stack(vacancy: dict[str, Any]) -> bool:
+    """True если вакансия — JS/TS-стек без Python (нам не подходит)."""
+    name = (vacancy.get("name") or "").lower()
+    description = (vacancy.get("_raw_description") or "").lower()
+    haystack = name + " " + description
+
+    js_count = sum(1 for kw in JS_STACK_KEYWORDS if kw in haystack)
+    has_python = any(kw in haystack for kw in PYTHON_KEYWORDS)
+
+    # 2+ JS-технологии в тексте и ни одного упоминания Python → фильтруем
+    return js_count >= 2 and not has_python
 
 
 def has_ai_dev_keywords(vacancy: dict[str, Any]) -> bool:
@@ -185,6 +207,7 @@ def hard_filter(
         "low_salary": 0,
         "wrong_location": 0,
         "blacklist": 0,
+        "js_only": 0,
         "no_ai_keywords": 0,
         "passed": 0,
     }
@@ -210,7 +233,12 @@ def hard_filter(
             stats["blacklist"] += 1
             continue
 
-        # 4. AI ключевики в описании
+        # 4. JS-стек без Python — не наша история
+        if is_js_only_stack(vacancy):
+            stats["js_only"] += 1
+            continue
+
+        # 5. AI ключевики в описании
         if require_ai_keywords and not has_ai_dev_keywords(vacancy):
             stats["no_ai_keywords"] += 1
             continue
@@ -223,6 +251,7 @@ def hard_filter(
     print(f"    ЗП ниже минимума: {stats['low_salary']}")
     print(f"    Не удалёнка/не Москва: {stats['wrong_location']}")
     print(f"    Чёрный список (маркетологи, не наш стек): {stats['blacklist']}")
+    print(f"    JS-стек без Python: {stats['js_only']}")
     print(f"    Нет AI-ключевиков: {stats['no_ai_keywords']}")
     print(f"    ✅ Прошли: {stats['passed']}")
 
