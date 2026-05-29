@@ -26,6 +26,8 @@ from dotenv import load_dotenv
 
 from hh_client import HHClient
 from raberu import fetch_raberu_vacancies
+from habr_client import fetch_habr_vacancies
+from google_searcher import fetch_google_vacancies
 from filters import hard_filter, extract_salary, has_ai_dev_keywords
 from db import SeenDB
 from letter_gen import generate_letter
@@ -130,9 +132,28 @@ def main():
         print(f"  raberu.ru ошибка: {e} — пропускаем")
         raw_raberu = {}
 
-    # Объединяем оба источника
-    raw = {**raw_hh, **raw_raberu}
-    print(f"\n  Загружено всего: {len(raw)} ({len(raw_hh)} hh + {len(raw_raberu)} raberu)")
+    # ─── 1c. Поиск Habr Career ────────────────────────────────
+    print(f"\n🔍 [habr.career] Парсим вакансии...")
+    try:
+        raw_habr = fetch_habr_vacancies()
+        print(f"  habr career загружено: {len(raw_habr)}")
+    except Exception as e:
+        print(f"  habr career ошибка: {e} — пропускаем")
+        raw_habr = {}
+
+    # ─── 1d. Поиск через Google ───────────────────────────────
+    print(f"\n🔍 [google] Ищем вакансии в интернете...")
+    try:
+        raw_google = fetch_google_vacancies()
+        print(f"  google загружено: {len(raw_google)}")
+    except Exception as e:
+        print(f"  google ошибка: {e} — пропускаем")
+        raw_google = {}
+
+    # Объединяем все источники
+    raw = {**raw_hh, **raw_raberu, **raw_habr, **raw_google}
+    print(f"\n  📊 Загружено всего: {len(raw)}")
+    print(f"     hh.ru: {len(raw_hh)} | raberu: {len(raw_raberu)} | habr: {len(raw_habr)} | google: {len(raw_google)}")
 
     # ─── 2. Строгий фильтр ───────────────────────────────────
     filtered = hard_filter(raw, min_salary=min_salary)
